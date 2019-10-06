@@ -7,6 +7,8 @@ user = Table(
    Column('number', String, primary_key=True),
    Column('username', String, unique=True),
    Column('language', String),
+   Column('currency', String),
+   Column('prn', String),
 )
 
 friends = Table(
