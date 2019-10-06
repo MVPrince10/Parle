@@ -17,6 +17,7 @@ languages = { 'English':'en', 'Spanish':'es','Hindi':'hi','Japanese':'ja', 'Germ
 
 translator = Translator()
 
+
 def trans(message, languageDST, languageSRC):
     print(message)
     i = 0
@@ -38,6 +39,7 @@ def trans(message, languageDST, languageSRC):
     substr += translator.translate(message[start:len(message)], dest=languages[languageDST], src=languages[languageSRC]).text
     print(substr)
     return substr
+
 
 @app.route("/sms", methods=['POST'])
 def recieve_massage():
@@ -113,8 +115,8 @@ def recieve_massage():
                     users.append(sub)
                 i = j + 1
             i += 1
+
                 
-        
         if len(users) == 0:
             message2 = client.messages \
                 .create(
