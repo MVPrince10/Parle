@@ -2,23 +2,22 @@ from flask import Flask, request
 from twilio.rest import Client
 from twilio import twiml
 from googletrans import Translator
+from db import *
 
 app = Flask(__name__)
 
 account_sid = 'ACf849c1947357510945e67fa9a6884327'
 auth_token = 'a436f7bd8888bc2fe79a4ffc50ec2e1b'
 client = Client(account_sid, auth_token)
+twilio_num = '+19097267210'
 
-username_to_numbers = {}
-numbers_to_usernames = {}
-username_to_language = {}
-phone_numbers = []
-languages = { 'English':'en', 'Spanish':'es','Hindi':'hi','Japanese':'ja', 'German':'de'}
+languages = { 'english':'en', 'spanish':'es','hindi':'hi','japanese':'ja', 'german':'de', 'french': 'fr'}
+languages_num = {'1': 'english', '2': 'french', '3': 'spanish', '4': 'german', '5': 'hindi'}
 
 translator = Translator()
 
-def trans(message, languageDST, languageSRC):
-    print(message)
+def trans(message, languageSRC, languageDST):
+    print(message, languageSRC, languageDST)
     i = 0
     start = 0
     substr = ""
@@ -35,7 +34,7 @@ def trans(message, languageDST, languageSRC):
             while j < len(message) and message[j] != ' ':
                 j += 1
             print(message[i:j])
-            substr += message[i:j]
+            substr += message[i:j+1]
             start = j
             i = j
         i += 1
@@ -48,105 +47,126 @@ def trans(message, languageDST, languageSRC):
     return substr
 
 @app.route("/sms", methods=['POST'])
-def recieve_massage():
+def recieve_message():
 
     number = request.form['From']
     message = request.form['Body']
-    number = str(number)
-    message = str(message)
+    number = str(number).strip()
+    message = str(message).strip()
 
-    # First message received from user
-    if number not in phone_numbers:
-        print("number",number)
-        phone_numbers.append(number)
-        message2 = client.messages \
-                .create(
-                     body= "\nThank you for joining Parle!\n Please send a username",
-                     from_='+19097267210',
-                     to=number
-                )
-        print(message2.sid)
-    # Have prompted for username, but don't have username
-    elif number not in username_to_numbers.values():
-        if message in username_to_numbers.keys():
-            message2 = client.messages \
-                .create(
-                     body= "Username already in use. Please send another username",
-                     from_='+19097267210',
-                     to=number
-                )
-            print(message2.sid)
-        else:
-            message2 = client.messages \
-                .create(
-                     body= "Thank you. What is your preffered language?",
-                     from_='+19097267210',
-                     to=number
-                )
-            print(message2.sid)
-            username_to_numbers[message] = number
-            numbers_to_usernames[number] = message
+
+    # query for user
+    try:
+        select = user.select().where(user.c.number == number)
+        conn = engine.connect()
+        sender = conn.execute(select)
+        sender = sender.fetchone()
+    except Exception as err:
+        print(str(err))
+        return ''
+
+    if sender is None:
+        print('number', number)
+        # add number to database
+        try:
+            ins = user.insert().values(number=number)
+            conn = engine.connect()
+            result = conn.execute(ins)
+        except Exception as err:
+            print('ERROR: ', str(err))
+            return ''
+        # send message
+        msg = '\nFor English text 1\nPour Francais texte 2\nPara Espanol texto 3\nFur Deutsch schreib 4\nHindi paath 5'
+        send_message(msg, number)
+        return ''
+
     # Have username, but we need language
-    elif numbers_to_usernames[number] not in username_to_language:
-        if message in languages:
-            username_to_language[numbers_to_usernames[number]] = message
-            message2 = client.messages \
-                .create(
-                     body= "One last thing. What country do you live in?",
-                     from_='+19097267210',
-                     to=number
-                )
-            print(message2.sid)
-        else:
-            message2 = client.messages \
-                .create(
-                     body= "This language is not supported. Please send another language.",
-                     from_='+19097267210',
-                     to=number
-                )
-            print(message2.sid)
+    elif sender['language'] is None:
+        lang = languages_num.get(message)
+        if lang is None:
+            message = '\nFor English text 1\nPour Francais texte 2\nPara Espanol texto 3\nFur Deutsch schreib 4\nHindi paath 5'
+            send_message(message, number)
+            return ''
+
+        lang = languages[lang]
+        conn = engine.connect()
+        upd = user.update().where(user.c.number == number).values(language = lang)
+        result = conn.execute(upd)
+
+        message = '\nLanguage registered! Please send your username'
+        message = translator.translate(message, dest=lang, src='en').text
+        send_message(message, number)
+        return ''
+
+    # Have prompted for username, but don't have username
+    elif sender['username'] is None:
+        message = message.lower()
+        try:
+            conn = engine.connect()
+            upd = user.update().where(user.c.number == number).values(username = message)
+            result = conn.execute(upd)
+        except Exception as err:
+            print('ERROR: ', str(err))
+            message = '\nUsername in use. Please try again.'
+            message = translator.translate(message, dest=str(sender['language']), src='en').text
+            send_message(message, number)
+            return ''
+        
+        message = '\nRegistered!'
+        message = translator.translate(message, dest=str(sender['language']), src='en').text
+        send_message(message, number)
+        return ''
+
     # Have username and language, but need currency
     # Have all information from user
     else:
         i = 0
-        users = []
-        while i < len(message):
-            if message[i] == '@':
-                j = i + 1
-                while j < len(message) and message[j] != ' ':
-                    j += 1
-                sub = message[i+1:j]
-                print(sub)
-                if sub in username_to_numbers.keys():
-                    users.append(sub)
-                i = j + 1
-            i += 1
-                
-        
-        if len(users) == 0:
-            message2 = client.messages \
-                .create(
-                     body= "No valid users in message",
-                     from_='+19097267210',
-                     to=number
-                )
-            print(message2.sid)
+        usernames = []
+        words = message.split()
+        for word in words:
+            if len(word) > 0 and word[0] == '@':
+                usernames.append(word[1:])
+
+                        
+        if len(usernames) == 0:
+            message = '\nUser not found'
+            message = translator.translate(message, dest=str(sender['language']), src='en').text
+            send_message(message, number)
+            return ''
         else:
-            
-            for user in users:
-                body = trans(message, username_to_language[user], username_to_language[numbers_to_usernames[number]])
-               # body = translator.translate(message, dest=languages[username_to_language[user]], src=languages[username_to_language[numbers_to_usernames[number]]]).text
-                message = "@" + numbers_to_usernames[number] + ": " + body
-                message2 = client.messages \
-                .create(
-                     body= message,
-                     from_='+19097267210',
-                     to=username_to_numbers[user]
-                )
-                print(message2.sid)
-            
+            for username in usernames:
+                username = username.lower()
+                try:
+                    select = user.select().where(user.c.username == username)
+                    conn = engine.connect()
+                    recipient = conn.execute(select)
+                    recipient = recipient.fetchone()
+                    number = str(recipient['number'])
+                except Exception as err:
+                    print('ERROR: ', str(err))
+                    message = '\n invalid username.'
+                    message = translator.translate(message, dest=str(sender['language']), src='en').text
+                    send_message(message, number)
+                    return ''
+                print(recipient['username'], recipient['language'])
+                body = translator.translate(message, dest=str(recipient['language']), src=str(sender['language'])).text
+                From = translator.translate('From', dest=str(recipient['language']), src='en').text
+                trans_message = From + ' @' + sender['username'] + ': \n' + body
+                send_message(trans_message, number)
+            return ''      
 
     return "Hello World!"
+
+def send_message(message, to_num):
+    # using twilio
+    message2 = client.messages \
+                .create(
+                     body= message,
+                     from_= twilio_num,
+                     to= to_num
+                )
+    return ''
+
 
 if __name__ == "__main__":
     app.run(debug=True)
