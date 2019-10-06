@@ -17,7 +17,6 @@ languages = { 'English':'en', 'Spanish':'es','Hindi':'hi','Japanese':'ja', 'Germ
 
 translator = Translator()
 
-
 def trans(message, languageDST, languageSRC):
     print(message)
     i = 0
@@ -26,20 +25,27 @@ def trans(message, languageDST, languageSRC):
     while i < len(message):
         if message[i] == '@':
             print(message[start:i])
-            substr += translator.translate(message[start:i], dest=languages[languageDST], src=languages[languageSRC]).text
+            if i - 1 > start:
+                s = message[start:i]
+                if not s.isspace() and len(s) > 0:
+                    substr += translator.translate(s, dest=languages[languageDST], src=languages[languageSRC]).text
+                else:
+                    substr += s
             j = i
-            while message[j] != ' ':
+            while j < len(message) and message[j] != ' ':
                 j += 1
             print(message[i:j])
             substr += message[i:j]
             start = j
             i = j
         i += 1
-    
-    substr += translator.translate(message[start:len(message)], dest=languages[languageDST], src=languages[languageSRC]).text
+    s = message[start:len(message)]
+    if not s.isspace() and len(s) > 0:
+        substr += translator.translate(message[start:len(message)], dest=languages[languageDST], src=languages[languageSRC]).text
+    else:
+        substr += s
     print(substr)
     return substr
-
 
 @app.route("/sms", methods=['POST'])
 def recieve_massage():
@@ -107,7 +113,7 @@ def recieve_massage():
         while i < len(message):
             if message[i] == '@':
                 j = i + 1
-                while message[j] != ' ' and j < len(message):
+                while j < len(message) and message[j] != ' ':
                     j += 1
                 sub = message[i+1:j]
                 print(sub)
@@ -115,8 +121,8 @@ def recieve_massage():
                     users.append(sub)
                 i = j + 1
             i += 1
-
                 
+        
         if len(users) == 0:
             message2 = client.messages \
                 .create(
@@ -128,8 +134,8 @@ def recieve_massage():
         else:
             
             for user in users:
-               # body = trans(message, username_to_language[user], username_to_language[numbers_to_usernames[number]])
-                body = translator.translate(message, dest=languages[username_to_language[user]], src=languages[username_to_language[numbers_to_usernames[number]]]).text
+                body = trans(message, username_to_language[user], username_to_language[numbers_to_usernames[number]])
+               # body = translator.translate(message, dest=languages[username_to_language[user]], src=languages[username_to_language[numbers_to_usernames[number]]]).text
                 message = "@" + numbers_to_usernames[number] + ": " + body
                 message2 = client.messages \
                 .create(
