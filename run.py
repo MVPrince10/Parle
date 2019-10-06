@@ -10,11 +10,17 @@ import json
 app = Flask(__name__)
 
 
-account_sid = 'ACf849c1947357510945e67fa9a6884327'
-auth_token = 'a436f7bd8888bc2fe79a4ffc50ec2e1b'
-client = Client(account_sid, auth_token)
-twilio_num = '+19097267210'
+account_sid = 'ACf22bede7f95a9a4daf12a0839fbb4b1b'
+auth_token = '8f087f2ed7f2a3af668a0e43754d0431'
+twilio_num = '+13604502362'
+
 base_url = 'https://sandbox.galileo-ft.com/inserv/4.0/'
+
+# account_sid = 'AC4ff68924dac04103f83927dc992a459a'
+# auth_token = 'e56af4b41cf425a6c9db7de8e387e7ed'
+# twilio_num = '+12076146073'
+
+client = Client(account_sid, auth_token)
 
 languages = { 'english':'en', 'spanish':'es','hindi':'hi','japanese':'ja', 'german':'de', 'french': 'fr'}
 languages_num = {'1': 'english', '2': 'french', '3': 'spanish', '4': 'german', '5': 'hindi'}
@@ -54,7 +60,7 @@ def recieve_message():
             print('ERROR: ', str(err))
             return ''
         # send message
-        msg = '\nFor English text 1\nPour Francais texte 2\nPara Espanol texto 3\nFur Deutsch schreib 4\nHindi paath 5'
+        msg = '\n(1) English\n(2) Francais\n(3) Espanol\n(4) Deutsch\n(5) Hindi'
         send_message(msg, number)
         return ''
 
@@ -62,7 +68,7 @@ def recieve_message():
     elif sender['language'] is None:
         lang = languages_num.get(message)
         if lang is None:
-            message = '\nFor English text 1\nPour Francais texte 2\nPara Espanol texto 3\nFur Deutsch schreib 4\nHindi paath 5'
+            message = '\n(1) English\n(2) Francais\n(3) Espanol\n(4) Deutsch\n(5) Hindi'
             send_message(message, number)
             return ''
 
@@ -71,8 +77,8 @@ def recieve_message():
         upd = user.update().where(user.c.number == number).values(language = lang)
         result = conn.execute(upd)
 
-        message = '\nLanguage registered!\n Select your preferred currency:'
-        message = translator.translate(message, dest=lang, src='en').text + '\nUSD 1\nEUR 2\nINR 3\nGBP 4\nMXN 5'
+        message = '\nLanguage registered!\nSelect your preferred currency:'
+        message = translator.translate(message, dest=lang, src='en').text + '\n(1) USD\n(2) EUR\n(3) INR\n(4) GBP\n(5) MXN'
         send_message(message, number)
         return ''
 
@@ -164,11 +170,11 @@ def recieve_message():
                     send_message(message, number)
                     return ''
                 if paying:
-                    if galileo.create_transfer(amount, str(sender['prn']), str(recipient['prn'])):
+                    if galileo.create_transfer(amount * currencies_conversion[sender['currency']], str(sender['prn']), str(recipient['prn'])):
                         balance = galileo.get_balance(str(recipient['prn']))
-                        message = '\n' + str(amount) + ' ' + str(recipient['currency']) + ' ' + \
+                        message = '\n' + str('{:12.2f}'.format(amount * currencies_conversion[sender['currency']] / currencies_conversion[recipient['currency']])) + ' ' + str(recipient['currency']).upper() + ' ' + \
                         'ParlePay recieved from ' + '@' + str(sender['username']) + \
-                        '. ' + 'your new balance is ' + str(balance) + ' ' + str(recipient['currency'])
+                        '. ' + 'your new balance is ' + str('{:12.2f}'.format(balance / currencies_conversion[recipient['currency']])) + ' ' + str(recipient['currency']).upper()
                         message = translator.translate(message, dest=str(recipient['language']), src='en').text
                         send_message(message, number)
                         continue
@@ -186,7 +192,7 @@ def recieve_message():
 
             if paying:
                 balance = galileo.get_balance(sender['prn'])
-                message = '\nPayment confirmed. Your new balance is ' + str(balance) + ' ' + str(sender['currency'])
+                message = '\nPayment confirmed. Your new balance is ' + str('{:12.2f}'.format(balance / currencies_conversion[sender['currency']])) + ' ' + str(sender['currency']).upper()
                 message = translator.translate(message, dest=str(sender['language']), src='en').text
                 send_message(message, str(sender['number']))
             return ''      
